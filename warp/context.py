@@ -564,10 +564,12 @@ def call_builtin(func: Function, *params) -> Tuple[bool, Any]:
         return (True, ret)
 
     if value_type == warp.types.float16:
-        return (True, warp.types.half_bits_to_float(ret.value))
+        value = warp.types.half_bits_to_float(ret.value)
+    else:
+        value = ret.value
 
     # return scalar types as int/float
-    return (True, ret.value)
+    return (True, value)
 
 
 class KernelHooks:
@@ -2797,48 +2799,38 @@ class Runtime:
                 ctypes.c_void_p,
                 ctypes.c_void_p,
                 ctypes.c_int,
-                ctypes.c_float,
-                ctypes.c_float,
-                ctypes.c_float,
-                ctypes.c_float,
-                ctypes.c_float,
+                ctypes.c_float * 9,
+                ctypes.c_float * 3,
                 ctypes.c_bool,
+                ctypes.c_float,
             ]
             self.core.volume_f_from_tiles_device.restype = ctypes.c_uint64
             self.core.volume_v_from_tiles_device.argtypes = [
                 ctypes.c_void_p,
                 ctypes.c_void_p,
                 ctypes.c_int,
-                ctypes.c_float,
-                ctypes.c_float,
-                ctypes.c_float,
-                ctypes.c_float,
-                ctypes.c_float,
-                ctypes.c_float,
-                ctypes.c_float,
+                ctypes.c_float * 9,
+                ctypes.c_float * 3,
                 ctypes.c_bool,
+                ctypes.c_float * 3,
             ]
             self.core.volume_v_from_tiles_device.restype = ctypes.c_uint64
             self.core.volume_i_from_tiles_device.argtypes = [
                 ctypes.c_void_p,
                 ctypes.c_void_p,
                 ctypes.c_int,
-                ctypes.c_float,
-                ctypes.c_int,
-                ctypes.c_float,
-                ctypes.c_float,
-                ctypes.c_float,
+                ctypes.c_float * 9,
+                ctypes.c_float * 3,
                 ctypes.c_bool,
+                ctypes.c_int,
             ]
             self.core.volume_i_from_tiles_device.restype = ctypes.c_uint64
             self.core.volume_index_from_tiles_device.argtypes = [
                 ctypes.c_void_p,
                 ctypes.c_void_p,
                 ctypes.c_int,
-                ctypes.c_float,
-                ctypes.c_float,
-                ctypes.c_float,
-                ctypes.c_float,
+                ctypes.c_float * 9,
+                ctypes.c_float * 3,
                 ctypes.c_bool,
             ]
             self.core.volume_index_from_tiles_device.restype = ctypes.c_uint64
@@ -2846,10 +2838,8 @@ class Runtime:
                 ctypes.c_void_p,
                 ctypes.c_void_p,
                 ctypes.c_int,
-                ctypes.c_float,
-                ctypes.c_float,
-                ctypes.c_float,
-                ctypes.c_float,
+                ctypes.c_float * 9,
+                ctypes.c_float * 3,
                 ctypes.c_bool,
             ]
             self.core.volume_from_active_voxels_device.restype = ctypes.c_uint64
@@ -4788,7 +4778,7 @@ def launch(
 
         # detect illegal inter-kernel read/write access patterns if verification flag is set
         if warp.config.verify_autograd_array_access:
-            runtime.tape.check_kernel_array_access(kernel, fwd_args)
+            runtime.tape._check_kernel_array_access(kernel, fwd_args)
 
 
 def synchronize():
@@ -5296,8 +5286,16 @@ def type_str(t):
         return "Any"
     elif t == Callable:
         return "Callable"
+    elif t == Tuple[int]:
+        return "Tuple[int]"
     elif t == Tuple[int, int]:
         return "Tuple[int, int]"
+    elif t == Tuple[int, int, int]:
+        return "Tuple[int, int, int]"
+    elif t == Tuple[int, int, int, int]:
+        return "Tuple[int, int, int, int]"
+    elif t == Tuple[int, ...]:
+        return "Tuple[int, ...]"
     elif isinstance(t, int):
         return str(t)
     elif isinstance(t, List):
@@ -5425,14 +5423,6 @@ def export_functions_rst(file):  # pragma: no cover
     print(".. class:: Transformation", file=file)
     print(".. class:: Array", file=file)
 
-    print("\nQuery Types", file=file)
-    print("-------------", file=file)
-    print(".. autoclass:: bvh_query_t", file=file)
-    print(".. autoclass:: hash_grid_query_t", file=file)
-    print(".. autoclass:: mesh_query_aabb_t", file=file)
-    print(".. autoclass:: mesh_query_point_t", file=file)
-    print(".. autoclass:: mesh_query_ray_t", file=file)
-
     # build dictionary of all functions by group
     groups = {}
 
@@ -5445,8 +5435,17 @@ def export_functions_rst(file):  # pragma: no cover
         for o in f.overloads:
             groups[f.group].append(o)
 
-    # Keep track of what function names have been written
-    written_functions = {}
+    # Keep track of what function and query types have been written
+    written_functions = set()
+    written_query_types = set()
+
+    query_types = (
+        ("bvh_query", "BvhQuery"),
+        ("mesh_query_aabb", "MeshQueryAABB"),
+        ("mesh_query_point", "MeshQueryPoint"),
+        ("mesh_query_ray", "MeshQueryRay"),
+        ("hash_grid_query", "HashGridQuery"),
+    )
 
     for k, g in groups.items():
         print("\n", file=file)
@@ -5454,12 +5453,18 @@ def export_functions_rst(file):  # pragma: no cover
         print("---------------", file=file)
 
         for f in g:
+            for f_prefix, query_type in query_types:
+                if f.key.startswith(f_prefix) and query_type not in written_query_types:
+                    print(f".. autoclass:: {query_type}", file=file)
+                    written_query_types.add(query_type)
+                    break
+
             if f.key in written_functions:
                 # Add :noindex: + :nocontentsentry: since Sphinx gets confused
                 print_function(f, file=file, noentry=True)
             else:
                 if print_function(f, file=file):
-                    written_functions[f.key] = []
+                    written_functions.add(f.key)
 
     # footnotes
     print(".. rubric:: Footnotes", file=file)
