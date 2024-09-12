@@ -279,7 +279,8 @@ def from_paddle(
             # allocate a zero-filled gradient if it doesn't exist
             # Note: we use Warp to allocate the shared gradient with compatible strides
             grad = warp.zeros(dtype=dtype, shape=shape, strides=strides, device=device_from_paddle(t.place))
-            t.grad = to_paddle(grad, requires_grad=False)
+            paddle_grad = to_paddle(grad, requires_grad=False)
+            t.grad_ = paddle_grad
             grad_ptr = grad.ptr
 
     if return_ctype:
@@ -324,6 +325,7 @@ def to_paddle(a, requires_grad: bool = None):
         paddle.Tensor: The converted tensor.
     """
     import paddle
+    import paddle.utils.dlpack
 
     if requires_grad is None:
         requires_grad = a.requires_grad
@@ -340,17 +342,18 @@ def to_paddle(a, requires_grad: bool = None):
         t = paddle.to_tensor(numpy.asarray(a))
         t.stop_gradient = not requires_grad
         if requires_grad and a.requires_grad:
-            t.grad = paddle.to_tensor(numpy.asarray(a.grad))
+            t.grad_ = paddle.to_tensor(numpy.asarray(a.grad))
         return t
 
     elif a.device.is_cuda:
         # Paddle does support the __cuda_array_interface__
         # correctly, but we must be sure to maintain a reference
         # to the owning object to prevent memory allocs going out of scope
-        t = paddle.to_tensor(a.numpy(), place=device_to_paddle(a.device))
+        t = paddle.utils.dlpack.from_dlpack(warp.to_dlpack(a))
+        t = t.to(device=device_to_paddle(a.device))
         t.stop_gradient = not requires_grad
         if requires_grad and a.requires_grad:
-            t.grad = paddle.to_tensor(a.grad.numpy(), device=device_to_paddle(a.device))
+            t.grad_ = paddle.utils.dlpack.from_dlpack(warp.to_dlpack(a.grad)).to(device=device_to_paddle(a.device))
         return t
 
     else:

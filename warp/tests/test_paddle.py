@@ -318,7 +318,7 @@ def test_array_ctype_from_paddle(test, device):
     def wrap_vec_tensor_with_existing_grad(vec_dtype):
         t = paddle.zeros((10, vec_dtype._length_), dtype=paddle.float32).to(device=paddle_device)
         t.stop_gradient = False
-        t.grad = paddle.zeros((10, vec_dtype._length_), dtype=paddle.float32).to(device=paddle_device)
+        t.grad_ = paddle.zeros((10, vec_dtype._length_), dtype=paddle.float32).to(device=paddle_device)
         a = wp.from_paddle(t, dtype=vec_dtype, return_ctype=True)
         ctype_size = ctypes.sizeof(vec_dtype._type_)
         assert a.data == t.data_ptr()
@@ -451,7 +451,7 @@ def test_from_paddle_slices(test, device):
     t = t_base[2:9:2]
     a = wp.from_paddle(t)
     assert a.ptr == t.data_ptr()
-    assert a.is_contiguous
+    assert not a.is_contiguous
     assert a.shape == tuple(t.shape)
     # copy contents to contiguous array
     a_contiguous = wp.empty_like(a)
@@ -463,7 +463,7 @@ def test_from_paddle_slices(test, device):
     t = t_base[1:3, 2:5]
     a = wp.from_paddle(t)
     assert a.ptr == t.data_ptr()
-    assert a.is_contiguous
+    assert not a.is_contiguous
     assert a.shape == tuple(t.shape)
     # copy contents to contiguous array
     a_contiguous = wp.empty_like(a)
@@ -475,7 +475,7 @@ def test_from_paddle_slices(test, device):
     t = t_base[::2, 0:1, 1:2]
     a = wp.from_paddle(t)
     assert a.ptr == t.data_ptr()
-    assert a.is_contiguous
+    assert not a.is_contiguous
     assert a.shape == tuple(t.shape)
     # copy contents to contiguous array
     a_contiguous = wp.empty_like(a)
@@ -487,7 +487,7 @@ def test_from_paddle_slices(test, device):
     t = t_base[1:7:2, 2:5]
     a = wp.from_paddle(t, dtype=wp.vec3)
     assert a.ptr == t.data_ptr()
-    assert a.is_contiguous
+    assert not a.is_contiguous
     assert a.shape == tuple(t.shape[:-1])
     # copy contents to contiguous array
     a_contiguous = wp.empty_like(a)
@@ -499,7 +499,7 @@ def test_from_paddle_slices(test, device):
     t = t_base[1:7:2, 2:5]
     a = wp.from_paddle(t, dtype=wp.mat22)
     assert a.ptr == t.data_ptr()
-    assert a.is_contiguous
+    assert not a.is_contiguous
     assert a.shape == tuple(t.shape[:-2])
     # copy contents to contiguous array
     a_contiguous = wp.empty_like(a)
@@ -769,9 +769,9 @@ def test_direct(test, device):
 
     expected = paddle.arange(1, n + 1, dtype=paddle.float32).to(device=paddle_device)
 
-    assert paddle.equal(s, expected)
-    assert paddle.equal(v.reshape(n), expected)
-    assert paddle.equal(m.reshape(n), expected)
+    assert paddle.equal_all(s, expected).item()
+    assert paddle.equal_all(v.reshape([n]), expected).item()
+    assert paddle.equal_all(m.reshape([n]), expected).item()
 
 
 class TestPaddle(unittest.TestCase):
