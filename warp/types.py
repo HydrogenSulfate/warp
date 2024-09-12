@@ -12,7 +12,7 @@ import ctypes
 import inspect
 import struct
 import zlib
-from typing import Any, Callable, Generic, List, NamedTuple, Optional, Tuple, TypeVar, Union
+from typing import Any, Callable, Generic, List, NamedTuple, Optional, Sequence, Tuple, TypeVar, Union
 
 import numpy as np
 
@@ -48,6 +48,15 @@ class Transformation(Generic[Float]):
 
 class Array(Generic[DType]):
     pass
+
+
+int_tuple_type_hints = {
+    Tuple[int]: 1,
+    Tuple[int, int]: 2,
+    Tuple[int, int, int]: 3,
+    Tuple[int, int, int, int]: 4,
+    Tuple[int, ...]: -1,
+}
 
 
 def constant(x):
@@ -227,6 +236,12 @@ def vector(length, dtype):
 
         def __rtruediv__(self, x):
             return warp.div(x, self)
+
+        def __mod__(self, x):
+            return warp.mod(self, x)
+
+        def __rmod__(self, x):
+            return warp.mod(x, self)
 
         def __pos__(self):
             return warp.pos(self)
@@ -473,6 +488,65 @@ class void:
         pass
 
 
+class scalar_base:
+    def __init__(self, x=0):
+        self.value = x
+
+    def __bool__(self) -> builtins.bool:
+        return self.value != 0
+
+    def __float__(self) -> float:
+        return float(self.value)
+
+    def __int__(self) -> int:
+        return int(self.value)
+
+    def __add__(self, y):
+        return warp.add(self, y)
+
+    def __radd__(self, y):
+        return warp.add(y, self)
+
+    def __sub__(self, y):
+        return warp.sub(self, y)
+
+    def __rsub__(self, y):
+        return warp.sub(y, self)
+
+    def __mul__(self, y):
+        return warp.mul(self, y)
+
+    def __rmul__(self, x):
+        return warp.mul(x, self)
+
+    def __truediv__(self, y):
+        return warp.div(self, y)
+
+    def __rtruediv__(self, x):
+        return warp.div(x, self)
+
+    def __mod__(self, x):
+        return warp.mod(self, x)
+
+    def __rmod__(self, x):
+        return warp.mod(x, self)
+
+    def __pos__(self):
+        return warp.pos(self)
+
+    def __neg__(self):
+        return warp.neg(self)
+
+
+class float_base(scalar_base):
+    pass
+
+
+class int_base(scalar_base):
+    def __index__(self) -> int:
+        return int(self.value)
+
+
 class bool:
     _length_ = 1
     _type_ = ctypes.c_bool
@@ -490,215 +564,59 @@ class bool:
         return int(self.value != 0)
 
 
-class float16:
+class float16(float_base):
     _length_ = 1
     _type_ = ctypes.c_uint16
 
-    def __init__(self, x=0.0):
-        self.value = x
 
-    def __bool__(self) -> bool:
-        return self.value != 0.0
-
-    def __float__(self) -> float:
-        return float(self.value)
-
-    def __int__(self) -> int:
-        return int(self.value)
-
-
-class float32:
+class float32(float_base):
     _length_ = 1
     _type_ = ctypes.c_float
 
-    def __init__(self, x=0.0):
-        self.value = x
 
-    def __bool__(self) -> bool:
-        return self.value != 0.0
-
-    def __float__(self) -> float:
-        return float(self.value)
-
-    def __int__(self) -> int:
-        return int(self.value)
-
-
-class float64:
+class float64(float_base):
     _length_ = 1
     _type_ = ctypes.c_double
 
-    def __init__(self, x=0.0):
-        self.value = x
 
-    def __bool__(self) -> bool:
-        return self.value != 0.0
-
-    def __float__(self) -> float:
-        return float(self.value)
-
-    def __int__(self) -> int:
-        return int(self.value)
-
-
-class int8:
+class int8(int_base):
     _length_ = 1
     _type_ = ctypes.c_int8
 
-    def __init__(self, x=0):
-        self.value = x
 
-    def __bool__(self) -> bool:
-        return self.value != 0
-
-    def __float__(self) -> float:
-        return float(self.value)
-
-    def __int__(self) -> int:
-        return int(self.value)
-
-    def __index__(self) -> int:
-        return int(self.value)
-
-
-class uint8:
+class uint8(int_base):
     _length_ = 1
     _type_ = ctypes.c_uint8
 
-    def __init__(self, x=0):
-        self.value = x
 
-    def __bool__(self) -> bool:
-        return self.value != 0
-
-    def __float__(self) -> float:
-        return float(self.value)
-
-    def __int__(self) -> int:
-        return int(self.value)
-
-    def __index__(self) -> int:
-        return int(self.value)
-
-
-class int16:
+class int16(int_base):
     _length_ = 1
     _type_ = ctypes.c_int16
 
-    def __init__(self, x=0):
-        self.value = x
 
-    def __bool__(self) -> bool:
-        return self.value != 0
-
-    def __float__(self) -> float:
-        return float(self.value)
-
-    def __int__(self) -> int:
-        return int(self.value)
-
-    def __index__(self) -> int:
-        return int(self.value)
-
-
-class uint16:
+class uint16(int_base):
     _length_ = 1
     _type_ = ctypes.c_uint16
 
-    def __init__(self, x=0):
-        self.value = x
 
-    def __bool__(self) -> bool:
-        return self.value != 0
-
-    def __float__(self) -> float:
-        return float(self.value)
-
-    def __int__(self) -> int:
-        return int(self.value)
-
-    def __index__(self) -> int:
-        return int(self.value)
-
-
-class int32:
+class int32(int_base):
     _length_ = 1
     _type_ = ctypes.c_int32
 
-    def __init__(self, x=0):
-        self.value = x
 
-    def __bool__(self) -> bool:
-        return self.value != 0
-
-    def __float__(self) -> float:
-        return float(self.value)
-
-    def __int__(self) -> int:
-        return int(self.value)
-
-    def __index__(self) -> int:
-        return int(self.value)
-
-
-class uint32:
+class uint32(int_base):
     _length_ = 1
     _type_ = ctypes.c_uint32
 
-    def __init__(self, x=0):
-        self.value = x
 
-    def __bool__(self) -> bool:
-        return self.value != 0
-
-    def __float__(self) -> float:
-        return float(self.value)
-
-    def __int__(self) -> int:
-        return int(self.value)
-
-    def __index__(self) -> int:
-        return int(self.value)
-
-
-class int64:
+class int64(int_base):
     _length_ = 1
     _type_ = ctypes.c_int64
 
-    def __init__(self, x=0):
-        self.value = x
 
-    def __bool__(self) -> bool:
-        return self.value != 0
-
-    def __float__(self) -> float:
-        return float(self.value)
-
-    def __int__(self) -> int:
-        return int(self.value)
-
-    def __index__(self) -> int:
-        return int(self.value)
-
-
-class uint64:
+class uint64(int_base):
     _length_ = 1
     _type_ = ctypes.c_uint64
-
-    def __init__(self, x=0):
-        self.value = x
-
-    def __bool__(self) -> bool:
-        return self.value != 0
-
-    def __float__(self) -> float:
-        return float(self.value)
-
-    def __int__(self) -> int:
-        return int(self.value)
-
-    def __index__(self) -> int:
-        return int(self.value)
 
 
 def quaternion(dtype=Any):
@@ -1073,6 +991,43 @@ vector_types = (
     spatial_matrixd,
 )
 
+atomic_vector_types = (
+    vec2i,
+    vec2ui,
+    vec2l,
+    vec2ul,
+    vec2h,
+    vec2f,
+    vec2d,
+    vec3i,
+    vec3ui,
+    vec3l,
+    vec3ul,
+    vec3h,
+    vec3f,
+    vec3d,
+    vec4i,
+    vec4ui,
+    vec4l,
+    vec4ul,
+    vec4h,
+    vec4f,
+    vec4d,
+    mat22h,
+    mat22f,
+    mat22d,
+    mat33h,
+    mat33f,
+    mat33d,
+    mat44h,
+    mat44f,
+    mat44d,
+    quath,
+    quatf,
+    quatd,
+)
+atomic_types = float_types + (int32, uint32, int64, uint64) + atomic_vector_types
+
 np_dtype_to_warp_type = {
     # Numpy scalar types
     np.bool_: bool,
@@ -1154,6 +1109,9 @@ class bvh_query_t:
         pass
 
 
+BvhQuery = bvh_query_t
+
+
 # definition just for kernel type (cannot be a parameter), see mesh.h
 class mesh_query_aabb_t:
     """Object used to track state during mesh traversal."""
@@ -1162,12 +1120,18 @@ class mesh_query_aabb_t:
         pass
 
 
+MeshQueryAABB = mesh_query_aabb_t
+
+
 # definition just for kernel type (cannot be a parameter), see hash_grid.h
 class hash_grid_query_t:
     """Object used to track state during neighbor traversal."""
 
     def __init__(self):
         pass
+
+
+HashGridQuery = hash_grid_query_t
 
 
 # maximum number of dimensions, must match array.h
@@ -1382,7 +1346,8 @@ def type_repr(t):
     if t in scalar_types:
         return t.__name__
 
-    return t.__module__ + "." + t.__qualname__
+    name = getattr(t, "__qualname__", t.__name__)
+    return t.__module__ + "." + name
 
 
 def type_is_int(t):
@@ -1482,6 +1447,25 @@ def scalars_equal(a, b, match_generic):
 
 
 def types_equal(a, b, match_generic=False):
+    if match_generic:
+        if a in int_tuple_type_hints and isinstance(b, Sequence):
+            a_length = int_tuple_type_hints[a]
+            if (a_length == -1 or a_length == len(b)) and all(
+                scalars_equal(x, Int, match_generic=match_generic) for x in b
+            ):
+                return True
+        if b in int_tuple_type_hints and isinstance(a, Sequence):
+            b_length = int_tuple_type_hints[b]
+            if (b_length == -1 or b_length == len(a)) and all(
+                scalars_equal(x, Int, match_generic=match_generic) for x in a
+            ):
+                return True
+        if a in int_tuple_type_hints and b in int_tuple_type_hints:
+            a_length = int_tuple_type_hints[a]
+            b_length = int_tuple_type_hints[b]
+            if a_length is None or b_length is None or a_length == b_length:
+                return True
+
     # convert to canonical types
     if a == float:
         a = float32
@@ -1641,7 +1625,7 @@ class array(Array):
 
         Args:
             data (Union[list, tuple, ndarray]): An object to construct the array from, can be a Tuple, List, or generally any type convertible to an np.array
-            dtype (Union): One of the built-in types, e.g.: :class:`warp.mat33`, if dtype is Any and data an ndarray then it will be inferred from the array data type
+            dtype (Union): One of the available `data types <#data-types>`_, such as :class:`warp.float32`, :class:`warp.mat33`, or a custom `struct <#structs>`_. If dtype is ``Any`` and data is an ndarray, then it will be inferred from the array data type
             shape (tuple): Dimensions of the array
             strides (tuple): Number of bytes in each dimension between successive elements of the array
             length (int): Number of elements of the data type (deprecated, users should use `shape` argument)
@@ -1666,6 +1650,9 @@ class array(Array):
         self._array_interface = None
         self.is_transposed = False
 
+        # reference to other array
+        self._ref = None
+
         # canonicalize dtype
         if dtype == int:
             dtype = int32
@@ -1679,7 +1666,9 @@ class array(Array):
             if isinstance(shape, int):
                 shape = (shape,)
             else:
-                shape = tuple(shape)
+                # The type of shape's elements are eventually passed onto capacity which is used to allocate memory. We
+                # explicitly enforce that shape is a tuple of (64-bit) ints to ensure that capacity is 64-bit.
+                shape = tuple(int(x) for x in shape)
                 if len(shape) > ARRAY_MAX_DIMS:
                     raise RuntimeError(
                         f"Failed to create array with shape {shape}, the maximum number of dimensions is {ARRAY_MAX_DIMS}"
@@ -1714,9 +1703,6 @@ class array(Array):
                 self._requires_grad = requires_grad
                 if requires_grad:
                     self._alloc_grad()
-
-        # reference to other array
-        self._ref = None
 
     def _init_from_data(self, data, dtype, shape, device, copy, pinned):
         if not hasattr(data, "__len__"):
@@ -3054,7 +3040,7 @@ class Mesh:
 
         Args:
             points (:class:`warp.array`): Array of vertex positions of type :class:`warp.vec3`
-            indices (:class:`warp.array`): Array of triangle indices of type :class:`warp.int32`, should be a 1d array with shape (num_tris, 3)
+            indices (:class:`warp.array`): Array of triangle indices of type :class:`warp.int32`, should be a 1d array with shape (num_tris * 3)
             velocities (:class:`warp.array`): Array of vertex velocities of type :class:`warp.vec3` (optional)
             support_winding_number (bool): If true the mesh will build additional datastructures to support `wp.mesh_query_point_sign_winding_number()` queries
         """
@@ -3592,8 +3578,9 @@ class Volume:
         )
         if hasattr(bg_value, "__len__"):
             # vec3, assuming the numpy array is 4D
-            padded_array = np.array((target_shape[0], target_shape[1], target_shape[2], 3), dtype=np.single)
-            padded_array[:, :, :, :] = np.array(bg_value)
+            padded_array = np.full(
+                shape=(target_shape[0], target_shape[1], target_shape[2], 3), fill_value=bg_value, dtype=np.single
+            )
             padded_array[0 : ndarray.shape[0], 0 : ndarray.shape[1], 0 : ndarray.shape[2], :] = ndarray
         else:
             padded_amount = (
@@ -3698,9 +3685,39 @@ class Volume:
 
         return cls.allocate_by_tiles(tile_points, voxel_size, bg_value, translation, device)
 
+    @staticmethod
+    def _fill_transform_buffers(
+        voxel_size: Union[float, List[float]],
+        translation,
+        transform,
+    ):
+        if transform is None:
+            if voxel_size is None:
+                raise ValueError("Either 'voxel_size' or 'transform' must be provided")
+
+            if isinstance(voxel_size, float):
+                voxel_size = (voxel_size, voxel_size, voxel_size)
+            transform = mat33f(voxel_size[0], 0.0, 0.0, 0.0, voxel_size[1], 0.0, 0.0, 0.0, voxel_size[2])
+        else:
+            if voxel_size is not None:
+                raise ValueError("Only one of 'voxel_size' or 'transform' must be provided")
+
+            if not isinstance(transform, mat33f):
+                transform = mat33f(transform)
+
+        transform_buf = (ctypes.c_float * 9).from_buffer_copy(transform)
+        translation_buf = (ctypes.c_float * 3)(translation[0], translation[1], translation[2])
+        return transform_buf, translation_buf
+
     @classmethod
     def allocate_by_tiles(
-        cls, tile_points: array, voxel_size: float, bg_value=0.0, translation=(0.0, 0.0, 0.0), device=None
+        cls,
+        tile_points: array,
+        voxel_size: Union[float, List[float]] = None,
+        bg_value=0.0,
+        translation=(0.0, 0.0, 0.0),
+        device=None,
+        transform=None,
     ) -> Volume:
         """Allocate a new Volume with active tiles for each point tile_points.
 
@@ -3718,16 +3735,15 @@ class Volume:
                 The array may use an integer scalar type (2D N-by-3 array of :class:`warp.int32` or 1D array of `warp.vec3i` values), indicating index space positions,
                 or a floating point scalar type (2D N-by-3 array of :class:`warp.float32` or 1D array of `warp.vec3f` values), indicating world space positions.
                 Repeated points per tile are allowed and will be efficiently deduplicated.
-            voxel_size (float): Voxel size of the new volume.
+            voxel_size (float or array-like): Voxel size(s) of the new volume. Ignored if `transform` is given.
             bg_value (array-like, float, int or None): Value of unallocated voxels of the volume, also defines the volume's type. A :class:`warp.vec3` volume is created if this is `array-like`, an index volume will be created if `bg_value` is ``None``.
             translation (array-like): Translation between the index and world spaces.
+            transform (array-like): Linear transform between the index and world spaces. If ``None``, deduced from `voxel_size`.
             device (Devicelike): The CUDA device to create the volume on, e.g.: "cuda" or "cuda:0".
 
         """
         device = warp.get_device(device)
 
-        if voxel_size <= 0.0:
-            raise RuntimeError(f"Voxel size must be positive! Got {voxel_size}")
         if not device.is_cuda:
             raise RuntimeError("Only CUDA devices are supported for allocate_by_tiles")
         if not _is_contiguous_vec_like_array(tile_points, vec_length=3, scalar_types=(float32, int32)):
@@ -3740,15 +3756,16 @@ class Volume:
         volume = cls(data=None)
         volume.device = device
         in_world_space = type_scalar_type(tile_points.dtype) == float32
+
+        transform_buf, translation_buf = Volume._fill_transform_buffers(voxel_size, translation, transform)
+
         if bg_value is None:
             volume.id = volume.runtime.core.volume_index_from_tiles_device(
                 volume.device.context,
                 ctypes.c_void_p(tile_points.ptr),
                 tile_points.shape[0],
-                voxel_size,
-                translation[0],
-                translation[1],
-                translation[2],
+                transform_buf,
+                translation_buf,
                 in_world_space,
             )
         elif hasattr(bg_value, "__len__"):
@@ -3756,38 +3773,30 @@ class Volume:
                 volume.device.context,
                 ctypes.c_void_p(tile_points.ptr),
                 tile_points.shape[0],
-                voxel_size,
-                bg_value[0],
-                bg_value[1],
-                bg_value[2],
-                translation[0],
-                translation[1],
-                translation[2],
+                transform_buf,
+                translation_buf,
                 in_world_space,
+                (ctypes.c_float * 3)(bg_value[0], bg_value[1], bg_value[2]),
             )
         elif isinstance(bg_value, int):
             volume.id = volume.runtime.core.volume_i_from_tiles_device(
                 volume.device.context,
                 ctypes.c_void_p(tile_points.ptr),
                 tile_points.shape[0],
-                voxel_size,
-                bg_value,
-                translation[0],
-                translation[1],
-                translation[2],
+                transform_buf,
+                translation_buf,
                 in_world_space,
+                bg_value,
             )
         else:
             volume.id = volume.runtime.core.volume_f_from_tiles_device(
                 volume.device.context,
                 ctypes.c_void_p(tile_points.ptr),
                 tile_points.shape[0],
-                voxel_size,
-                float(bg_value),
-                translation[0],
-                translation[1],
-                translation[2],
+                transform_buf,
+                translation_buf,
                 in_world_space,
+                float(bg_value),
             )
 
         if volume.id == 0:
@@ -3797,7 +3806,12 @@ class Volume:
 
     @classmethod
     def allocate_by_voxels(
-        cls, voxel_points: array, voxel_size: float, translation=(0.0, 0.0, 0.0), device=None
+        cls,
+        voxel_points: array,
+        voxel_size: Union[float, List[float]] = None,
+        translation=(0.0, 0.0, 0.0),
+        device=None,
+        transform=None,
     ) -> Volume:
         """Allocate a new Volume with active voxel for each point voxel_points.
 
@@ -3812,19 +3826,16 @@ class Volume:
                 The array may use an integer scalar type (2D N-by-3 array of :class:`warp.int32` or 1D array of `warp.vec3i` values), indicating index space positions,
                 or a floating point scalar type (2D N-by-3 array of :class:`warp.float32` or 1D array of `warp.vec3f` values), indicating world space positions.
                 Repeated points per tile are allowed and will be efficiently deduplicated.
-            voxel_size (float): Voxel size of the new volume.
+            voxel_size (float or array-like): Voxel size(s) of the new volume. Ignored if `transform` is given.
             translation (array-like): Translation between the index and world spaces.
+            transform (array-like): Linear transform between the index and world spaces. If ``None``, deduced from `voxel_size`.
             device (Devicelike): The CUDA device to create the volume on, e.g.: "cuda" or "cuda:0".
 
         """
         device = warp.get_device(device)
 
-        if voxel_size <= 0.0:
-            raise RuntimeError(f"Voxel size must be positive! Got {voxel_size}")
         if not device.is_cuda:
             raise RuntimeError("Only CUDA devices are supported for allocate_by_tiles")
-        if not (is_array(voxel_points) and voxel_points.is_contiguous):
-            raise RuntimeError("tile_points must be a contiguous array")
         if not _is_contiguous_vec_like_array(voxel_points, vec_length=3, scalar_types=(float32, int32)):
             raise RuntimeError(
                 "voxel_points must be contiguous and either a 1D warp array of vec3f or vec3i or a 2D n-by-3 array of int32 or float32."
@@ -3836,14 +3847,14 @@ class Volume:
         volume.device = device
         in_world_space = type_scalar_type(voxel_points.dtype) == float32
 
+        transform_buf, translation_buf = Volume._fill_transform_buffers(voxel_size, translation, transform)
+
         volume.id = volume.runtime.core.volume_from_active_voxels_device(
             volume.device.context,
             ctypes.c_void_p(voxel_points.ptr),
             voxel_points.shape[0],
-            voxel_size,
-            translation[0],
-            translation[1],
-            translation[2],
+            transform_buf,
+            translation_buf,
             in_world_space,
         )
 
@@ -3895,6 +3906,9 @@ class mesh_query_point_t:
     }
 
 
+MeshQueryPoint = mesh_query_point_t
+
+
 # definition just for kernel type (cannot be a parameter), see mesh.h
 # NOTE: its layout must match the corresponding struct defined in C.
 class mesh_query_ray_t:
@@ -3924,6 +3938,9 @@ class mesh_query_ray_t:
         "v": Var("v", float32),
         "normal": Var("normal", vec3),
     }
+
+
+MeshQueryRay = mesh_query_ray_t
 
 
 def matmul(
