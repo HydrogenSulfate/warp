@@ -704,10 +704,10 @@ Warp provides helper functions to convert arrays to/from Paddle::
 
     w = wp.array([1.0, 2.0, 3.0], dtype=float, device="cpu")
 
-    # convert to Torch tensor
+    # convert to Paddle tensor
     t = wp.to_paddle(w)
 
-    # convert from Torch tensor
+    # convert from Paddle tensor
     w = wp.from_paddle(t)
 
 These helper functions allow the conversion of Warp arrays to/from Paddle tensors without copying the underlying data.
@@ -806,103 +806,6 @@ Here, we revisit the same example from above where now only a single conversion 
         wp.launch(loss, dim=len(xs), inputs=[xs], outputs=[l], device=xs.device)
         print(f"{i}\tloss: {l.numpy()[0]}")
 
-Example: Optimization using ``paddle.autograd.PyLayer``
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-
-One can insert Warp kernel launches in a Paddle graph by defining a :class:`paddle.autograd.PyLayer` class, which
-requires forward and backward functions to be defined. After mapping incoming paddle arrays to Warp arrays, a Warp kernel
-may be launched in the usual way. In the backward pass, the same kernel's adjoint may be launched by
-setting ``adjoint = True`` in :func:`wp.launch() <launch>`. Alternatively, the user may choose to rely on Warp's tape.
-In the following example, we demonstrate how Warp may be used to evaluate the Rosenbrock function in an optimization context::
-
-    import warp as wp
-    import numpy as np
-    import paddle
-
-    # init warp context at beginning
-    wp.context.init()
-
-    pvec2 = wp.types.vector(length=2, dtype=wp.float32)
-
-    # Define the Rosenbrock function
-    @wp.func
-    def rosenbrock(x: float, y: float):
-        return (1.0 - x) ** 2.0 + 100.0 * (y - x**2.0) ** 2.0
-
-    @wp.kernel
-    def eval_rosenbrock(
-        xs: wp.array(dtype=pvec2),
-        # outputs
-        z: wp.array(dtype=float),
-    ):
-        i = wp.tid()
-        x = xs[i]
-        z[i] = rosenbrock(x[0], x[1])
-
-
-    class Rosenbrock(paddle.autograd.PyLayer):
-        @staticmethod
-        def forward(ctx, xy, num_points):
-            ctx.xy = wp.from_paddle(xy, dtype=pvec2, requires_grad=True)
-            ctx.num_points = num_points
-
-            # allocate output
-            ctx.z = wp.zeros(num_points, requires_grad=True)
-
-            wp.launch(
-                kernel=eval_rosenbrock,
-                dim=ctx.num_points,
-                inputs=[ctx.xy],
-                outputs=[ctx.z]
-            )
-
-            return wp.to_paddle(ctx.z)
-
-        @staticmethod
-        def backward(ctx, adj_z):
-            # map incoming Torch grads to our output variables
-            ctx.z.grad = wp.from_paddle(adj_z)
-
-            wp.launch(
-                kernel=eval_rosenbrock,
-                dim=ctx.num_points,
-                inputs=[ctx.xy],
-                outputs=[ctx.z],
-                adj_inputs=[ctx.xy.grad],
-                adj_outputs=[ctx.z.grad],
-                adjoint=True
-            )
-
-            # return adjoint w.r.t. inputs
-            return wp.to_paddle(ctx.xy.grad)
-
-
-    num_points = 1500
-    learning_rate = 5e-2
-
-    paddle_device = wp.device_to_paddle(wp.get_device())
-
-    rng = np.random.default_rng(42)
-    xy = paddle.to_tensor(
-        rng.normal(size=(num_points, 2)),
-        dtype=paddle.float32,
-        stop_gradient=False,
-        place=paddle_device,
-    )
-    opt = paddle.optimizer.Adam(learning_rate=learning_rate, parameters=[xy])
-
-    for _ in range(10000):
-        # step
-        opt.clear_grad()
-        z = Rosenbrock.apply(xy, num_points)
-        z.backward(paddle.ones_like(z))
-
-        opt.step()
-
-    # minimum at (1, 1)
-    xy_np = xy.numpy()
-    print(np.mean(xy_np, axis=0))
-
 Performance Notes
 ^^^^^^^^^^^^^^^^^
 
@@ -936,7 +839,7 @@ If reusing arrays is not possible (e.g., a new Paddle tensor is constructed on e
 .. code:: python
 
     for n in range(1, 10):
-        # get Torch tensors for this iteration
+        # get Paddle tensors for this iteration
         x_t = paddle.arange(n, dtype=paddle.float32, device=device)
         y_t = paddle.ones([n], dtype=paddle.float32, device=device)
 
@@ -964,9 +867,9 @@ Sample output:
 
 .. code::
 
-    14197 ms  from_paddle(...)
-    5965 ms  from_paddle(..., return_ctype=True)
-    35074 ms  direct from paddle
+    13990 ms  from_paddle(...)
+    5990 ms  from_paddle(..., return_ctype=True)
+    35167 ms  direct from paddle
 
 The default ``wp.from_paddle()`` conversion is the slowest.  Passing ``return_ctype=True`` is the fastest, because it skips creating temporary Warp array objects.  Passing Paddle tensors to Warp kernels directly falls somewhere in between.  It skips creating temporary Warp arrays, but accessing the ``__cuda_array_interface__`` attributes of Paddle tensors adds overhead because they are initialized on-demand.
 
@@ -991,6 +894,7 @@ The canonical way to export a Warp array to an external framework is to use the 
 
     jax_array = jax.dlpack.from_dlpack(warp_array)
     torch_tensor = torch.utils.dlpack.from_dlpack(warp_array)
+    paddle_tensor = paddle.utils.dlpack.from_dlpack(warp_array)
 
 For CUDA arrays, this will synchronize the current stream of the consumer framework with the current Warp stream on the array's device.
 Thus it should be safe to use the wrapped array in the consumer framework, even if the array was previously used in a Warp kernel
@@ -1001,9 +905,11 @@ This approach may be used for older versions of frameworks that do not support t
 
     warp_array1 = wp.from_dlpack(jax.dlpack.to_dlpack(jax_array))
     warp_array2 = wp.from_dlpack(torch.utils.dlpack.to_dlpack(torch_tensor))
+    warp_array3 = wp.from_dlpack(paddle.utils.dlpack.to_dlpack(paddle_tensor))
 
     jax_array = jax.dlpack.from_dlpack(wp.to_dlpack(warp_array))
     torch_tensor = torch.utils.dlpack.from_dlpack(wp.to_dlpack(warp_array))
+    paddle_tensor = paddle.utils.dlpack.from_dlpack(wp.to_dlpack(warp_array))
 
 This approach is generally faster because it skips any stream synchronization, but another solution must be used to ensure correct
 ordering of operations.  In situations where no synchronization is required, using this approach can yield better performance.
