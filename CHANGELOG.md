@@ -31,6 +31,7 @@
 - Unexposed `wp.rand*()`, `wp.sample*()`, and `wp.poisson()` from the Python scope.
 - Skip unused functions in module code generation, improving performance.
 - Avoid reloading modules if their content does not change, improving performance.
+- `wp.Mesh.points` is now a property instead of a raw data member, its reference can be changed after the mesh is initialized.
 
 ### Fixed
 
@@ -53,6 +54,8 @@
 - Fix handling of `stream` argument in `array.__dlpack__()`.
 - Fix a bug related to reloading CPU modules.
 - Fix a crash when kernel functions are not found in CPU modules.
+- Fix conditions not being evaluated as expected in `while` statements.
+- Fix printing Boolean and 8-bit integer values.
 
 ## [1.3.3] - 2024-09-04
 
