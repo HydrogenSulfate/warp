@@ -409,6 +409,9 @@ class Struct:
             elif issubclass(var.type, ctypes.Array):
                 fields.append((label, var.type))
             else:
+                # HACK: fp16 requires conversion functions from warp.so
+                if var.type is warp.float16:
+                    warp.init()
                 fields.append((label, var.type._type_))
 
         class StructType(ctypes.Structure):
@@ -1647,7 +1650,7 @@ class Adjoint:
         if isinstance(obj, types.ModuleType):
             return obj
 
-        raise RuntimeError("Cannot reference a global variable from a kernel unless `wp.constant()` is being used")
+        raise TypeError(f"Invalid external reference type: {type(obj)}")
 
     @staticmethod
     def resolve_type_attribute(var_type: type, attr: str):

@@ -66,8 +66,8 @@ def constant(x):
         x: Compile-time constant value, can be any of the built-in math types.
     """
 
-    if not isinstance(x, (builtins.bool, int, float, tuple(scalar_and_bool_types), ctypes.Array)):
-        raise RuntimeError(f"Invalid constant type: {type(x)}")
+    if not is_value(x):
+        raise TypeError(f"Invalid constant type: {type(x)}")
 
     return x
 
@@ -1302,7 +1302,7 @@ def type_to_warp(dtype):
 
 def type_typestr(dtype):
     if dtype == bool:
-        return "?"
+        return "|b1"
     elif dtype == float16:
         return "<f2"
     elif dtype == float32:
@@ -1310,9 +1310,9 @@ def type_typestr(dtype):
     elif dtype == float64:
         return "<f8"
     elif dtype == int8:
-        return "b"
+        return "|i1"
     elif dtype == uint8:
-        return "B"
+        return "|u1"
     elif dtype == int16:
         return "<i2"
     elif dtype == uint16:
@@ -1384,7 +1384,7 @@ value_types = (int, float, builtins.bool) + scalar_types
 
 # returns true for all value types (int, float, bool, scalars, vectors, matrices)
 def type_is_value(x):
-    return x in value_types or issubclass(x, ctypes.Array)
+    return x in value_types or hasattr(x, "_wp_scalar_type_")
 
 
 # equivalent of the above but for values

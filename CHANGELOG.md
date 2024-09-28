@@ -32,6 +32,7 @@
 - Skip unused functions in module code generation, improving performance.
 - Avoid reloading modules if their content does not change, improving performance.
 - `wp.Mesh.points` is now a property instead of a raw data member, its reference can be changed after the mesh is initialized.
+- Improve error message when invalid objects are referenced in a Warp kernel.
 
 ### Fixed
 
@@ -56,6 +57,8 @@
 - Fix a crash when kernel functions are not found in CPU modules.
 - Fix conditions not being evaluated as expected in `while` statements.
 - Fix printing Boolean and 8-bit integer values.
+- Fix array interface type strings used for Boolean and 8-bit integer values.
+- Fix initialization error when setting struct members.
 
 ## [1.3.3] - 2024-09-04
 
