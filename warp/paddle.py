@@ -11,6 +11,7 @@ import ctypes
 from typing import TYPE_CHECKING, Optional, Union
 
 import numpy
+from paddle.base.libpaddle import CPUPlace, CUDAPlace, Place
 
 import warp
 import warp.context
@@ -20,20 +21,22 @@ if TYPE_CHECKING:
 
 
 # return the warp device corresponding to a paddle device
-def device_from_paddle(paddle_device: Union[paddle.base.libpaddle.Place, str]) -> warp.context.Device:
+def device_from_paddle(paddle_device: Union[Place, CUDAPlace, CPUPlace, str]) -> warp.context.Device:
     """Return the Warp device corresponding to a Paddle device.
 
     Args:
-        paddle_device (`paddle.base.libpaddle.Place` or `str`): Paddle device identifier
+        paddle_device (`Place`, `CUDAPlace`, `CPUPlace`, `CPUPlace` or `str`): Paddle device identifier
 
     Raises:
         RuntimeError: Paddle device does not have a corresponding Warp device
     """
     if type(paddle_device) is str:
+        if paddle_device.startswith("gpu:"):
+            paddle_device = paddle_device.replace("gpu:", "cuda:")
         warp_device = warp.context.runtime.device_map.get(paddle_device)
         if warp_device is not None:
             return warp_device
-        elif paddle_device.startswith("gpu"):
+        elif paddle_device == "gpu":
             return warp.context.runtime.get_current_cuda_device()
         else:
             raise RuntimeError(f"Unsupported Paddle device {paddle_device}")
@@ -41,17 +44,24 @@ def device_from_paddle(paddle_device: Union[paddle.base.libpaddle.Place, str]) -
         import paddle
 
         try:
-            if paddle_device.is_gpu_place():
-                return warp.context.runtime.cuda_devices[paddle_device.gpu_device_id()]
-            elif paddle_device.is_cpu_place():
+            if isinstance(paddle_device, Place):
+                if paddle_device.is_gpu_place():
+                    return warp.context.runtime.cuda_devices[paddle_device.gpu_device_id()]
+                elif paddle_device.is_cpu_place():
+                    return warp.context.runtime.cpu_device
+                else:
+                    raise RuntimeError(f"Unsupported Paddle device type {paddle_device}")
+            elif isinstance(paddle_device, CPUPlace):
                 return warp.context.runtime.cpu_device
-            else:
-                raise RuntimeError(f"Unsupported Paddle device type {paddle_device}")
+            elif isinstance(paddle_device, CUDAPlace):
+                return warp.context.runtime.cuda_devices[paddle_device.get_device_id()]
         except Exception as e:
             import paddle
 
             if not isinstance(paddle_device, paddle.base.libpaddle.Place):
-                raise ValueError("Argument must be a paddle.base.libpaddle.Place object or a string") from e
+                raise ValueError(
+                    f"Argument must be a paddle.base.libpaddle.Place object or a string, but got {paddle_device} {type(paddle_device)}"
+                ) from e
             raise
 
 
